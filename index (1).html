@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mirror — Avatar dal vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E0F12;
+    --panel:#17181D;
+    --panel-2:#1D1F26;
+    --line:#2A2C33;
+    --text:#EDEEF2;
+    --muted:#8C8F99;
+    --live:#7CFFB2;
+    --live-dim:#2E4A3B;
+    --amber:#FFB454;
+    --amber-dim:#4A3B22;
+    --danger:#FF6B6B;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 24px;
+    border-bottom:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .brand .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--muted);
+    transition:background .3s, box-shadow .3s;
+  }
+  .brand .dot.live{
+    background:var(--live);
+    box-shadow:0 0 10px var(--live);
+  }
+  .brand h1{
+    font-size:17px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .brand span.sub{
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  nav.tabs{
+    display:flex;
+    gap:4px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:4px;
+  }
+  nav.tabs button{
+    all:unset;
+    cursor:pointer;
+    padding:8px 18px;
+    border-radius:7px;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--muted);
+    transition:background .15s, color .15s;
+  }
+  nav.tabs button.active{
+    background:var(--panel-2);
+    color:var(--text);
+  }
+
+  main{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 340px;
+    gap:1px;
+    background:var(--line);
+    overflow:hidden;
+  }
+  @media (max-width:860px){
+    main{grid-template-columns:1fr;}
+  }
+
+  .stage{
+    background:var(--bg);
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:420px;
+    overflow:hidden;
+  }
+  .stage canvas{
+    max-width:100%;
+    max-height:100%;
+  }
+  #avatarCanvas{
+    border-radius:18px;
+    background:radial-gradient(circle at 50% 38%, #1B1D24 0%, #0E0F12 72%);
+    box-shadow:inset 0 0 0 1px var(--line);
+  }
+  video#cam{
+    display:none;
+  }
+
+  .stage-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:18px;
+  }
+  .hud-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+  }
+  .hud-pill{
+    pointer-events:auto;
+    background:rgba(23,24,29,.82);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:6px 11px;
+    font-size:11.5px;
+    color:var(--muted);
+    letter-spacing:.01em;
+  }
+  .hud-pill b{color:var(--text);font-weight:500;}
+
+  .stage-empty{
+    text-align:center;
+    color:var(--muted);
+    max-width:320px;
+    padding:0 20px;
+  }
+  .stage-empty p{font-size:14px;line-height:1.6;margin:10px 0 22px;}
+  .btn{
+    all:unset;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:11px 20px;
+    border-radius:9px;
+    font-size:14px;
+    font-weight:600;
+    pointer-events:auto;
+    transition:transform .1s, opacity .15s;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--live);color:#08130D;}
+  .btn-primary.voice{background:var(--amber);color:#1F1404;}
+  .btn-stop{background:var(--panel-2);color:var(--text);border:1px solid var(--line) !important;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .panel{
+    background:var(--panel);
+    padding:22px;
+    overflow-y:auto;
+  }
+  .panel h2{
+    font-size:12px;
+    text-transform:none;
+    letter-spacing:.02em;
+    color:var(--muted);
+    font-weight:500;
+    margin:0 0 16px;
+  }
+  .field{margin-bottom:22px;}
+  .field-label{
+    display:flex;
+    justify-content:space-between;
+    font-size:13.5px;
+    margin-bottom:9px;
+  }
+  .field-label .val{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--muted);
+    font-size:12px;
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;
+    height:4px;
+    border-radius:2px;
+    background:var(--line);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:15px;height:15px;
+    border-radius:50%;
+    background:var(--text);
+    cursor:pointer;
+    border:3px solid var(--bg);
+    box-shadow:0 0 0 1px var(--line);
+  }
+  #voicePanel input[type=range]::-webkit-slider-thumb{background:var(--amber);}
+  #mirrorPanel input[type=range]::-webkit-slider-thumb{background:var(--live);}
+
+  .toggle-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 0;
+    border-top:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .switch{
+    position:relative;
+    width:38px;height:22px;
+    background:var(--line);
+    border-radius:11px;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:background .15s;
+  }
+  .switch.on{background:var(--amber);}
+  .switch::after{
+    content:'';
+    position:absolute;
+    top:2px;left:2px;
+    width:18px;height:18px;
+    border-radius:50%;
+    background:#0E0F12;
+    transition:transform .15s;
+  }
+  .switch.on::after{transform:translateX(16px);}
+
+  .wave{
+    width:100%;
+    height:64px;
+    border-radius:8px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    margin-bottom:20px;
+  }
+
+  .status-line{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:18px;
+  }
+  .status-line .dot{width:7px;height:7px;border-radius:50%;background:var(--line);}
+  .status-line .dot.on{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+
+  footer{
+    padding:10px 24px;
+    border-top:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    font-size:11.5px;
+    color:var(--muted);
+    flex-shrink:0;
+  }
+  a{color:inherit;}
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot" id="liveDot"></span>
+    <h1>Mirror</h1>
+    <span class="sub">avatar dal vivo, gratis, nel browser</span>
+  </div>
+  <nav class="tabs">
+    <button class="active" data-tab="mirror">Specchio</button>
+    <button data-tab="voice">Voce</button>
+  </nav>
+</header>
+
+<main>
+  <div class="stage" id="stage">
+    <video id="cam" playsinline autoplay muted></video>
+    <canvas id="avatarCanvas" width="640" height="640" class="hidden"></canvas>
+    <div class="stage-empty" id="stageEmpty">
+      <p>Attiva la webcam per far muovere l'avatar seguendo la tua faccia in tempo reale. Nessun video viene salvato o inviato altrove: tutto resta nel tuo browser.</p>
+      <button class="btn btn-primary" id="startMirror">Avvia specchio</button>
+    </div>
+    <div class="stage-overlay hidden" id="stageOverlay">
+      <div class="hud-row">
+        <div class="hud-pill mono">TRACK <b id="trackState">—</b></div>
+        <div class="hud-pill mono" id="fpsPill">— fps</div>
+      </div>
+      <div class="hud-row">
+        <div></div>
+        <button class="btn btn-stop" id="stopMirror">Ferma</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="mirrorPanel">
+    <h2>Specchio — impostazioni avatar</h2>
+
+    <div class="field">
+      <div class="field-label"><span>Sensibilità espressioni</span><span class="val mono" id="sensVal">1.0×</span></div>
+      <input type="range" id="sens" min="0.5" max="2" step="0.05" value="1">
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Smorzamento movimento</span><span class="val mono" id="smoothVal">0.35</span></div>
+      <input type="range" id="smooth" min="0.05" max="0.7" step="0.01" value="0.35">
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Colore avatar</span></div>
+      <input type="range" id="hue" min="0" max="360" step="1" value="265">
+    </div>
+
+    <div class="toggle-row">
+      <span>Specchia orizzontalmente</span>
+      <div class="switch on" id="mirrorFlip"></div>
+    </div>
+    <div class="toggle-row">
+      <span>Mostra rilevamento testa</span>
+      <div class="switch" id="showDebug"></div>
+    </div>
+
+    <div class="field" style="margin-top:22px;border-top:1px solid var(--line);padding-top:20px;">
+      <div class="field-label"><span>Volto (IA, persona non reale)</span></div>
+      <input type="file" id="photoInput" accept="image/*" style="display:none;">
+      <button class="btn btn-stop" id="photoUploadBtn" style="width:100%;justify-content:center;margin-bottom:8px;">Carica foto</button>
+      <button class="btn btn-stop hidden" id="photoRemoveBtn" style="width:100%;justify-content:center;">Rimuovi foto — torna al volto disegnato</button>
+      <div id="photoStatus" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+
+    <p style="color:var(--muted);font-size:12.5px;line-height:1.6;margin-top:18px;">
+      Usa solo foto di volti generati dall'IA (es. thispersondoesnotexist.com) o comunque non riconducibili a una persona reale. Senza foto caricata resta attivo l'avatar disegnato. Anche con la foto: rotazioni estreme della testa mostrano artefatti, è un effetto "foto viva", non un rendering perfetto.
+    </p>
+  </div>
+</main>
+
+<footer>
+  <span>Nessun dato lascia questo browser. Webcam e microfono restano locali.</span>
+  <span class="mono">Mirror v1</span>
+</footer>
+
+<!-- ===================== VOICE TAB (swapped in via JS) ===================== -->
+<template id="voiceTemplate">
+  <main id="voiceMainInner">
+    <div class="stage">
+      <canvas class="wave" id="waveCanvas" style="width:90%;max-width:520px;"></canvas>
+    </div>
+    <div class="panel" id="voicePanel">
+      <h2>Voce — volumi e toni</h2>
+      <div class="status-line"><span class="dot" id="micDot"></span><span id="micStatus">Microfono spento</span></div>
+
+      <button class="btn btn-primary voice" id="startMic" style="width:100%;justify-content:center;margin-bottom:22px;">Avvia microfono</button>
+
+      <div class="field">
+        <div class="field-label"><span>Volume</span><span class="val mono" id="volVal">100%</span></div>
+        <input type="range" id="vol" min="0" max="200" step="1" value="100">
+      </div>
+      <div class="field">
+        <div class="field-label"><span>Bassi</span><span class="val mono" id="bassVal">0 dB</span></div>
+        <input type="range" id="bass" min="-20" max="20" step="1" value="0">
+      </div>
+      <div class="field">
+        <div class="field-label"><span>Medi</span><span class="val mono" id="midVal">0 dB</span></div>
+        <input type="range" id="mid" min="-20" max="20" step="1" value="0">
+      </div>
+      <div class="field">
+        <div class="field-label"><span>Alti</span><span class="val mono" id="trebleVal">0 dB</span></div>
+        <input type="range" id="treble" min="-20" max="20" step="1" value="0">
+      </div>
+      <div class="field">
+        <div class="field-label"><span>Tono (pitch) — sperimentale</span><span class="val mono" id="pitchVal">0 st</span></div>
+        <input type="range" id="pitch" min="-12" max="12" step="1" value="0">
+      </div>
+
+      <div class="toggle-row">
+        <span>Ascolta te stesso (monitor)</span>
+        <div class="switch" id="monitorToggle"></div>
+      </div>
+
+      <p style="color:var(--muted);font-size:12.5px;line-height:1.6;margin-top:18px;">
+        "Monitor" manda l'audio elaborato alle tue casse/cuffie in diretta. Usa le cuffie per evitare eco. Il pitch è un effetto semplice e leggero, pensato per giocare con il tono, non per una clonazione vocale.
+      </p>
+    </div>
+  </main>
+</template>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* ---------------- Tabs ---------------- */
+const tabButtons = document.querySelectorAll('nav.tabs button');
+const mainMirror = document.querySelector('main');
+let currentTab = 'mirror';
+
+const voiceTemplate = document.getElementById('voiceTemplate');
+let voiceMainEl = null;
+
+tabButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    tabButtons.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    if(currentTab === 'mirror'){
+      mainMirror.classList.remove('hidden');
+      if(voiceMainEl) voiceMainEl.classList.add('hidden');
+    } else {
+      mainMirror.classList.add('hidden');
+      if(!voiceMainEl){
+        voiceMainEl = voiceTemplate.content.firstElementChild.cloneNode(true);
+        document.body.insertBefore(voiceMainEl, document.querySelector('footer'));
+        initVoice();
+      }
+      voiceMainEl.classList.remove('hidden');
+    }
+  });
+});
+
+/* ==================================================================
+   MIRROR TAB — webcam face tracking -> canvas avatar
+   ================================================================== */
+
+const video = document.getElementById('cam');
+const canvas = document.getElementById('avatarCanvas');
+const ctx = canvas.getContext('2d');
+const stageEmpty = document.getElementById('stageEmpty');
+const stageOverlay = document.getElementById('stageOverlay');
+const trackState = document.getElementById('trackState');
+const fpsPill = document.getElementById('fpsPill');
+const liveDot = document.getElementById('liveDot');
+const startMirrorBtn = document.getElementById('startMirror');
+const stopMirrorBtn = document.getElementById('stopMirror');
+
+const sensInput = document.getElementById('sens');
+const smoothInput = document.getElementById('smooth');
+const hueInput = document.getElementById('hue');
+const mirrorFlipToggle = document.getElementById('mirrorFlip');
+const showDebugToggle = document.getElementById('showDebug');
+
+sensInput.addEventListener('input', ()=> document.getElementById('sensVal').textContent = parseFloat(sensInput.value).toFixed(2)+'×');
+smoothInput.addEventListener('input', ()=> document.getElementById('smoothVal').textContent = parseFloat(smoothInput.value).toFixed(2));
+[mirrorFlipToggle, showDebugToggle].forEach(sw=>{
+  sw.addEventListener('click', ()=> sw.classList.toggle('on'));
+});
+
+let faceLandmarker = null;
+let imageFaceLandmarker = null;
+let rafId = null;
+let lastTime = performance.now();
+let fpsSmooth = 0;
+
+/* ---- Photo ("living photo") mode ---- */
+const photoInput = document.getElementById('photoInput');
+const photoUploadBtn = document.getElementById('photoUploadBtn');
+const photoRemoveBtn = document.getElementById('photoRemoveBtn');
+const photoStatus = document.getElementById('photoStatus');
+
+let photoMode = false;
+let uploadedImg = null;
+let photoPoints = null; // pixel-space key points on the uploaded photo
+
+photoUploadBtn.addEventListener('click', ()=> photoInput.click());
+photoInput.addEventListener('change', handlePhotoUpload);
+photoRemoveBtn.addEventListener('click', ()=>{
+  photoMode = false;
+  uploadedImg = null;
+  photoPoints = null;
+  photoRemoveBtn.classList.add('hidden');
+  photoUploadBtn.classList.remove('hidden');
+  photoStatus.textContent = '';
+});
+
+async function handlePhotoUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  photoStatus.textContent = 'Analisi del volto nella foto…';
+  try{
+    const img = await loadImageFromFile(file);
+    if(!imageFaceLandmarker){
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      imageFaceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions:{
+          modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate:"GPU"
+        },
+        outputFaceBlendshapes:false,
+        outputFacialTransformationMatrixes:false,
+        runningMode:"IMAGE",
+        numFaces:1
+      });
+    }
+    const result = imageFaceLandmarker.detect(img);
+    if(!result.faceLandmarks || !result.faceLandmarks.length){
+      photoStatus.textContent = 'Non trovo un volto chiaro in questa foto. Usane una frontale, ben illuminata, con un solo viso.';
+      return;
+    }
+    const lm = result.faceLandmarks[0];
+    const P = (i)=> ({x: lm[i].x*img.naturalWidth, y: lm[i].y*img.naturalHeight});
+
+    const leftEyeOuter=P(33), leftEyeInner=P(133), leftEyeTop=P(159), leftEyeBot=P(145);
+    const rightEyeOuter=P(263), rightEyeInner=P(362), rightEyeTop=P(386), rightEyeBot=P(374);
+    const mouthL=P(61), mouthR=P(291), mouthTop=P(13), mouthBot=P(14);
+    const noseTip=P(1);
+    const faceLeft=P(234), faceRight=P(454), faceTop=P(10), faceChin=P(152);
+
+    photoPoints = {
+      pivot: noseTip,
+      leftEye:{ x:(leftEyeOuter.x+leftEyeInner.x)/2, y:(leftEyeTop.y+leftEyeBot.y)/2, w:Math.abs(leftEyeInner.x-leftEyeOuter.x), h:Math.abs(leftEyeBot.y-leftEyeTop.y) },
+      rightEye:{ x:(rightEyeOuter.x+rightEyeInner.x)/2, y:(rightEyeTop.y+rightEyeBot.y)/2, w:Math.abs(rightEyeInner.x-rightEyeOuter.x), h:Math.abs(rightEyeBot.y-rightEyeTop.y) },
+      mouth:{ x:(mouthL.x+mouthR.x)/2, y:(mouthTop.y+mouthBot.y)/2, w:Math.abs(mouthR.x-mouthL.x) },
+      faceW: Math.abs(faceRight.x-faceLeft.x),
+      faceH: Math.abs(faceChin.y-faceTop.y)
+    };
+
+    // sample a skin tone from the forehead area
+    const off = document.createElement('canvas');
+    off.width = img.naturalWidth; off.height = img.naturalHeight;
+    const octx = off.getContext('2d');
+    octx.drawImage(img,0,0);
+    const sampleX = Math.round(faceTop.x), sampleY = Math.round(faceTop.y + (faceChin.y-faceTop.y)*0.12);
+    const px = octx.getImageData(Math.max(0,sampleX-3), Math.max(0,sampleY-3), 6, 6).data;
+    let r=0,g=0,b=0,n=0;
+    for(let i=0;i<px.length;i+=4){ r+=px[i]; g+=px[i+1]; b+=px[i+2]; n++; }
+    photoPoints.skin = `rgb(${Math.round(r/n)}, ${Math.round(g/n)}, ${Math.round(b/n)})`;
+
+    uploadedImg = img;
+    photoMode = true;
+    photoUploadBtn.classList.add('hidden');
+    photoRemoveBtn.classList.remove('hidden');
+    photoStatus.textContent = 'Foto attiva: ora guida questo volto con le tue espressioni.';
+  }catch(err){
+    console.error(err);
+    photoStatus.textContent = 'Errore nel caricare la foto. Riprova con un JPG o PNG.';
+  }
+}
+
+function loadImageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// smoothed blendshape state
+const state = {
+  jawOpen:0, smile:0, browUp:0, browDown:0,
+  blinkL:0, blinkR:0, eyeWideL:0, eyeWideR:0,
+  pucker:0, yaw:0, pitch:0, roll:0
+};
+
+async function initFaceLandmarker(){
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate:"GPU"
+    },
+    outputFaceBlendshapes:true,
+    outputFacialTransformationMatrixes:true,
+    runningMode:"VIDEO",
+    numFaces:1
+  });
+}
+
+async function startMirror(){
+  startMirrorBtn.disabled = true;
+  startMirrorBtn.textContent = 'Avvio…';
+  try{
+    if(!faceLandmarker) await initFaceLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:640, height:640}});
+    video.srcObject = stream;
+    await video.play();
+    stageEmpty.classList.add('hidden');
+    canvas.classList.remove('hidden');
+    stageOverlay.classList.remove('hidden');
+    liveDot.classList.add('live');
+    trackState.textContent = 'attivo';
+    loop();
+  }catch(err){
+    console.error(err);
+    startMirrorBtn.disabled = false;
+    startMirrorBtn.textContent = 'Avvia specchio';
+    alert('Non riesco ad accedere alla webcam. Controlla i permessi del browser e che il sito sia servito via HTTPS (o localhost).');
+  }
+}
+
+function stopMirror(){
+  if(rafId) cancelAnimationFrame(rafId);
+  const stream = video.srcObject;
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  video.srcObject = null;
+  stageEmpty.classList.remove('hidden');
+  canvas.classList.add('hidden');
+  stageOverlay.classList.add('hidden');
+  liveDot.classList.remove('live');
+  startMirrorBtn.disabled = false;
+  startMirrorBtn.textContent = 'Avvia specchio';
+}
+
+startMirrorBtn.addEventListener('click', startMirror);
+stopMirrorBtn.addEventListener('click', stopMirror);
+
+function lerp(a,b,t){return a+(b-a)*t;}
+
+function loop(){
+  rafId = requestAnimationFrame(loop);
+  if(video.readyState < 2) return;
+
+  const now = performance.now();
+  const dt = now - lastTime;
+  lastTime = now;
+  const fps = 1000/dt;
+  fpsSmooth = fpsSmooth ? lerp(fpsSmooth, fps, 0.1) : fps;
+  fpsPill.textContent = Math.round(fpsSmooth) + ' fps';
+
+  const result = faceLandmarker.detectForVideo(video, now);
+
+  const smoothing = 1 - parseFloat(smoothInput.value);
+  const sens = parseFloat(sensInput.value);
+
+  if(result.faceBlendshapes && result.faceBlendshapes.length){
+    trackState.textContent = 'volto rilevato';
+    const cats = {};
+    result.faceBlendshapes[0].categories.forEach(c=> cats[c.categoryName] = c.score);
+
+    const targets = {
+      jawOpen: Math.min(1,(cats.jawOpen||0)*sens),
+      smile: Math.min(1,(((cats.mouthSmileLeft||0)+(cats.mouthSmileRight||0))/2)*sens),
+      browUp: Math.min(1,(((cats.browInnerUp||0)+(cats.browOuterUpLeft||0)+(cats.browOuterUpRight||0))/3)*sens),
+      browDown: Math.min(1,(((cats.browDownLeft||0)+(cats.browDownRight||0))/2)*sens),
+      blinkL: Math.min(1,(cats.eyeBlinkLeft||0)),
+      blinkR: Math.min(1,(cats.eyeBlinkRight||0)),
+      eyeWideL: Math.min(1,(cats.eyeWideLeft||0)*sens),
+      eyeWideR: Math.min(1,(cats.eyeWideRight||0)*sens),
+      pucker: Math.min(1,(cats.mouthPucker||0)*sens)
+    };
+    for(const k in targets) state[k] = lerp(state[k], targets[k], smoothing);
+
+    if(result.facialTransformationMatrixes && result.facialTransformationMatrixes.length){
+      const m = result.facialTransformationMatrixes[0].data;
+      const yaw = Math.atan2(-m[8], Math.sqrt(m[9]*m[9]+m[10]*m[10]));
+      const pitch = Math.atan2(m[9], m[10]);
+      const roll = Math.atan2(m[4], m[0]);
+      state.yaw = lerp(state.yaw, yaw, smoothing);
+      state.pitch = lerp(state.pitch, pitch, smoothing);
+      state.roll = lerp(state.roll, roll, smoothing);
+    }
+  } else {
+    trackState.textContent = 'nessun volto';
+  }
+
+  if(photoMode && uploadedImg && photoPoints){
+    drawPhotoAvatar();
+  } else {
+    drawAvatar();
+  }
+
+  if(showDebugToggle.classList.contains('on')){
+    drawDebug(result);
+  }
+}
+
+function drawPhotoAvatar(){
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.save();
+
+  const flip = mirrorFlipToggle.classList.contains('on') ? -1 : 1;
+  ctx.translate(w/2,0); ctx.scale(flip,1); ctx.translate(-w/2,0);
+
+  const img = uploadedImg, pts = photoPoints;
+  const scale = Math.min(w/img.naturalWidth, h/img.naturalHeight) * 0.92;
+  const drawW = img.naturalWidth*scale, drawH = img.naturalHeight*scale;
+  const offX = (w-drawW)/2, offY = (h-drawH)/2 + 20;
+
+  const toCanvas = (p)=> ({x: offX + p.x*scale, y: offY + p.y*scale});
+  const pivot = toCanvas(pts.pivot);
+
+  ctx.translate(pivot.x, pivot.y);
+  const roll = state.roll * -1;
+  const yaw = state.yaw * 1.1;
+  const pitchOff = state.pitch * 26;
+  ctx.rotate(roll);
+  ctx.translate(yaw*45, pitchOff);
+  ctx.translate(-pivot.x, -pivot.y);
+
+  ctx.drawImage(img, offX, offY, drawW, drawH);
+
+  // mouth: darken/open based on jawOpen
+  const mouth = toCanvas(pts.mouth);
+  const mouthWpx = pts.mouth.w*scale;
+  if(state.jawOpen > 0.06){
+    const openPx = state.jawOpen*26;
+    ctx.beginPath();
+    ctx.ellipse(mouth.x, mouth.y+openPx*0.4, mouthWpx*0.34, openPx, 0,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(35,14,14,0.88)';
+    ctx.fill();
+  }
+  if(state.smile > 0.1){
+    ctx.globalAlpha = Math.min(0.35, state.smile*0.4);
+    ctx.beginPath();
+    ctx.ellipse(mouth.x, mouth.y, mouthWpx*0.55, mouthWpx*0.18, 0,0,Math.PI*2);
+    ctx.fillStyle = pts.skin;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // eyelids: cover eye with skin tone when blinking
+  drawPhotoEyelid(toCanvas(pts.leftEye), pts.leftEye.w*scale, pts.leftEye.h*scale, state.blinkL, pts.skin);
+  drawPhotoEyelid(toCanvas(pts.rightEye), pts.rightEye.w*scale, pts.rightEye.h*scale, state.blinkR, pts.skin);
+
+  ctx.restore();
+}
+
+function drawPhotoEyelid(center, wpx, hpx, blink, skin){
+  if(blink < 0.25) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, blink*1.3);
+  ctx.beginPath();
+  ctx.ellipse(center.x, center.y, wpx*0.75, hpx*1.4, 0, 0, Math.PI*2);
+  ctx.fillStyle = skin;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDebug(result){
+  ctx.save();
+  ctx.font = '11px JetBrains Mono';
+  ctx.fillStyle = 'rgba(124,255,178,.7)';
+  ctx.fillText('yaw '+state.yaw.toFixed(2)+' pitch '+state.pitch.toFixed(2)+' roll '+state.roll.toFixed(2), 14, canvas.height-14);
+  ctx.restore();
+}
+
+function drawAvatar(){
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.save();
+  ctx.translate(w/2,h/2);
+
+  const flip = mirrorFlipToggle.classList.contains('on') ? -1 : 1;
+  ctx.scale(flip,1);
+
+  const yaw = state.yaw * 1.4;
+  const roll = state.roll * -1;
+  const pitchOff = state.pitch * 40;
+
+  ctx.rotate(roll);
+  ctx.translate(yaw*60, pitchOff);
+
+  const hue = parseInt(hueInput.value,10);
+  const skin = `hsl(${hue} 28% 78%)`;
+  const skinShadow = `hsl(${hue} 26% 68%)`;
+
+  // head
+  ctx.beginPath();
+  ctx.ellipse(0, 10, 168, 200, 0, 0, Math.PI*2);
+  ctx.fillStyle = skin;
+  ctx.fill();
+
+  // ears
+  ctx.beginPath();
+  ctx.ellipse(-160, 20, 26, 42, 0, 0, Math.PI*2);
+  ctx.ellipse(160, 20, 26, 42, 0, 0, Math.PI*2);
+  ctx.fillStyle = skin;
+  ctx.fill();
+
+  // cheeks shading
+  ctx.globalAlpha = .35;
+  ctx.beginPath();
+  ctx.ellipse(-95, 90, 40, 26, 0, 0, Math.PI*2);
+  ctx.ellipse(95, 90, 40, 26, 0, 0, Math.PI*2);
+  ctx.fillStyle = skinShadow;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // eyebrows
+  const browY = -95 - state.browUp*22 + state.browDown*14;
+  ctx.strokeStyle = '#3a2e26';
+  ctx.lineWidth = 11;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-96, browY+6); ctx.quadraticCurveTo(-58, browY-10-state.browUp*6, -22, browY+4+state.browDown*8);
+  ctx.moveTo(22, browY+4+state.browDown*8); ctx.quadraticCurveTo(58, browY-10-state.browUp*6, 96, browY+6);
+  ctx.stroke();
+
+  // eyes
+  drawEye(-58, -46, 1 - state.blinkL, state.eyeWideL);
+  drawEye(58, -46, 1 - state.blinkR, state.eyeWideR);
+
+  // nose
+  ctx.strokeStyle = skinShadow;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0,-14); ctx.quadraticCurveTo(-10,30,-16,44);
+  ctx.stroke();
+
+  // mouth
+  const openAmt = state.jawOpen*54;
+  const smileAmt = state.smile*26;
+  const puckerAmt = state.pucker*22;
+  const mouthW = 78 - puckerAmt;
+  ctx.beginPath();
+  ctx.moveTo(-mouthW, 92 - smileAmt*0.5);
+  ctx.quadraticCurveTo(0, 92 + openAmt + smileAmt*0.6, mouthW, 92 - smileAmt*0.5);
+  ctx.quadraticCurveTo(0, 92 - openAmt*0.15, -mouthW, 92 - smileAmt*0.5);
+  ctx.closePath();
+  ctx.fillStyle = '#7a2f34';
+  ctx.fill();
+
+  if(openAmt > 6){
+    ctx.beginPath();
+    ctx.ellipse(0, 96+openAmt*0.35, mouthW*0.5, openAmt*0.4, 0,0,Math.PI*2);
+    ctx.fillStyle = '#f3f3f3';
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawEye(x, y, openness, wide){
+  const eyeH = (14 + wide*8) * Math.max(0.04, openness);
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.beginPath();
+  ctx.ellipse(0,0, 26, eyeH, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.strokeStyle = '#2a2118';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  if(openness > 0.12){
+    ctx.beginPath();
+    ctx.arc(0,0, Math.min(10, eyeH*0.9), 0, Math.PI*2);
+    ctx.fillStyle = '#2a2118';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+
+/* ==================================================================
+   VOICE TAB — Web Audio: volume / EQ / pitch
+   ================================================================== */
+
+function initVoice(){
+  const startMicBtn = document.getElementById('startMic');
+  const micDot = document.getElementById('micDot');
+  const micStatus = document.getElementById('micStatus');
+  const waveCanvas = document.getElementById('waveCanvas');
+  const wctx = waveCanvas.getContext('2d');
+  const monitorToggle = document.getElementById('monitorToggle');
+
+  const volInput = document.getElementById('vol');
+  const bassInput = document.getElementById('bass');
+  const midInput = document.getElementById('mid');
+  const trebleInput = document.getElementById('treble');
+  const pitchInput = document.getElementById('pitch');
+
+  function fitCanvas(){
+    waveCanvas.width = waveCanvas.clientWidth * devicePixelRatio;
+    waveCanvas.height = waveCanvas.clientHeight * devicePixelRatio;
+  }
+  window.addEventListener('resize', fitCanvas);
+  setTimeout(fitCanvas, 50);
+
+  let audioCtx=null, source=null, gainNode=null, bassF=null, midF=null, trebleF=null;
+  let pitchNode=null, analyser=null, monitorGain=null, micStream=null;
+
+  volInput.addEventListener('input', ()=>{
+    document.getElementById('volVal').textContent = volInput.value+'%';
+    if(gainNode) gainNode.gain.value = volInput.value/100;
+  });
+  bassInput.addEventListener('input', ()=>{
+    document.getElementById('bassVal').textContent = bassInput.value+' dB';
+    if(bassF) bassF.gain.value = parseFloat(bassInput.value);
+  });
+  midInput.addEventListener('input', ()=>{
+    document.getElementById('midVal').textContent = midInput.value+' dB';
+    if(midF) midF.gain.value = parseFloat(midInput.value);
+  });
+  trebleInput.addEventListener('input', ()=>{
+    document.getElementById('trebleVal').textContent = trebleInput.value+' dB';
+    if(trebleF) trebleF.gain.value = parseFloat(trebleInput.value);
+  });
+  pitchInput.addEventListener('input', ()=>{
+    document.getElementById('pitchVal').textContent = pitchInput.value+' st';
+    if(pitchNode) pitchNode.setPitch(parseFloat(pitchInput.value));
+  });
+  monitorToggle.addEventListener('click', ()=>{
+    monitorToggle.classList.toggle('on');
+    if(!monitorGain) return;
+    monitorGain.gain.value = monitorToggle.classList.contains('on') ? 1 : 0;
+  });
+
+  class PitchShifter{
+    constructor(ctx, semitones){
+      this.ctx = ctx;
+      this.pitchRatio = Math.pow(2, semitones/12);
+      const bufSize = 4096;
+      this.node = ctx.createScriptProcessor(bufSize, 1, 1);
+      this.grain = 1024;
+      this.N = bufSize*3;
+      this.buf = new Float32Array(this.N);
+      this.writeIdx = 0;
+      this.readIdx = 0;
+      this.node.onaudioprocess = (e)=>this.process(e);
+    }
+    setPitch(semitones){ this.pitchRatio = Math.pow(2, semitones/12); }
+    process(e){
+      const input = e.inputBuffer.getChannelData(0);
+      const output = e.outputBuffer.getChannelData(0);
+      const N = this.N, buf = this.buf, grain = this.grain;
+      for(let i=0;i<input.length;i++){
+        buf[this.writeIdx] = input[i];
+        this.writeIdx = (this.writeIdx+1) % N;
+      }
+      if(Math.abs(this.pitchRatio-1) < 0.01){
+        output.set(input);
+        this.readIdx = (this.writeIdx - input.length + N) % N;
+        return;
+      }
+      for(let i=0;i<output.length;i++){
+        const phase = (this.readIdx % grain) / grain;
+        const idxA = Math.floor(this.readIdx) % N;
+        const idxB = Math.floor(this.readIdx + grain) % N;
+        output[i] = buf[idxA]*(1-phase) + buf[idxB]*phase;
+        this.readIdx += this.pitchRatio;
+        if(this.readIdx >= N) this.readIdx -= N;
+      }
+    }
+  }
+
+  async function startMic(){
+    startMicBtn.disabled = true;
+    startMicBtn.textContent = 'Avvio…';
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      source = audioCtx.createMediaStreamSource(micStream);
+
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = volInput.value/100;
+
+      bassF = audioCtx.createBiquadFilter();
+      bassF.type = 'lowshelf'; bassF.frequency.value = 300; bassF.gain.value = parseFloat(bassInput.value);
+
+      midF = audioCtx.createBiquadFilter();
+      midF.type = 'peaking'; midF.frequency.value = 1500; midF.Q.value = 0.9; midF.gain.value = parseFloat(midInput.value);
+
+      trebleF = audioCtx.createBiquadFilter();
+      trebleF.type = 'highshelf'; trebleF.frequency.value = 4500; trebleF.gain.value = parseFloat(trebleInput.value);
+
+      pitchNode = new PitchShifter(audioCtx, parseFloat(pitchInput.value));
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+
+      monitorGain = audioCtx.createGain();
+      monitorGain.gain.value = monitorToggle.classList.contains('on') ? 1 : 0;
+
+      source.connect(gainNode);
+      gainNode.connect(bassF);
+      bassF.connect(midF);
+      midF.connect(trebleF);
+      trebleF.connect(pitchNode.node);
+      pitchNode.node.connect(analyser);
+      analyser.connect(monitorGain);
+      monitorGain.connect(audioCtx.destination);
+
+      micDot.classList.add('on');
+      micStatus.textContent = 'Microfono attivo';
+      startMicBtn.textContent = 'Ferma microfono';
+      startMicBtn.disabled = false;
+      startMicBtn.onclick = stopMic;
+
+      drawWave();
+    }catch(err){
+      console.error(err);
+      startMicBtn.disabled = false;
+      startMicBtn.textContent = 'Avvia microfono';
+      alert('Non riesco ad accedere al microfono. Controlla i permessi del browser.');
+    }
+  }
+
+  function stopMic(){
+    if(micStream) micStream.getTracks().forEach(t=>t.stop());
+    if(audioCtx) audioCtx.close();
+    audioCtx=null;
+    micDot.classList.remove('on');
+    micStatus.textContent = 'Microfono spento';
+    startMicBtn.textContent = 'Avvia microfono';
+    startMicBtn.onclick = startMic;
+    wctx.clearRect(0,0,waveCanvas.width,waveCanvas.height);
+  }
+
+  startMicBtn.onclick = startMic;
+
+  function drawWave(){
+    if(!audioCtx) return;
+    requestAnimationFrame(drawWave);
+    const bufferLength = analyser.frequencyBinCount;
+    const data = new Uint8Array(bufferLength);
+    analyser.getByteTimeDomainData(data);
+    const W = waveCanvas.width, H = waveCanvas.height;
+    wctx.clearRect(0,0,W,H);
+    wctx.beginPath();
+    wctx.strokeStyle = '#FFB454';
+    wctx.lineWidth = 2*devicePixelRatio;
+    const slice = W/bufferLength;
+    let x=0;
+    for(let i=0;i<bufferLength;i++){
+      const v = data[i]/128.0;
+      const y = v*H/2;
+      if(i===0) wctx.moveTo(x,y); else wctx.lineTo(x,y);
+      x += slice;
+    }
+    wctx.stroke();
+  }
+}
+</script>
+</body>
+</html>
