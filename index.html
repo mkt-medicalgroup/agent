@@ -481,6 +481,7 @@ const photoStatus = document.getElementById('photoStatus');
 let photoMode = false;
 let uploadedImg = null;
 let photoPoints = null; // pixel-space key points on the uploaded photo
+let currentPhotoImg = null, offXglobal = 0, offYglobal = 0, drawWglobal = 0, drawHglobal = 0;
 
 photoUploadBtn.addEventListener('click', ()=> photoInput.click());
 photoInput.addEventListener('change', handlePhotoUpload);
@@ -532,7 +533,8 @@ async function handlePhotoUpload(e){
       pivot: noseTip,
       leftEye:{ x:(leftEyeOuter.x+leftEyeInner.x)/2, y:(leftEyeTop.y+leftEyeBot.y)/2, w:Math.abs(leftEyeInner.x-leftEyeOuter.x), h:Math.abs(leftEyeBot.y-leftEyeTop.y) },
       rightEye:{ x:(rightEyeOuter.x+rightEyeInner.x)/2, y:(rightEyeTop.y+rightEyeBot.y)/2, w:Math.abs(rightEyeInner.x-rightEyeOuter.x), h:Math.abs(rightEyeBot.y-rightEyeTop.y) },
-      mouth:{ x:(mouthL.x+mouthR.x)/2, y:(mouthTop.y+mouthBot.y)/2, w:Math.abs(mouthR.x-mouthL.x) },
+      mouth:{ x:(mouthL.x+mouthR.x)/2, y:(mouthTop.y+mouthBot.y)/2, w:Math.abs(mouthR.x-mouthL.x), topY:mouthTop.y, botY:mouthBot.y },
+      chinY: faceChin.y,
       faceW: Math.abs(faceRight.x-faceLeft.x),
       faceH: Math.abs(faceChin.y-faceTop.y)
     };
@@ -702,6 +704,9 @@ function drawPhotoAvatar(){
   const drawW = img.naturalWidth*scale, drawH = img.naturalHeight*scale;
   const offX = (w-drawW)/2, offY = (h-drawH)/2 + 20;
 
+  currentPhotoImg = img;
+  offXglobal = offX; offYglobal = offY; drawWglobal = drawW; drawHglobal = drawH;
+
   const toCanvas = (p)=> ({x: offX + p.x*scale, y: offY + p.y*scale});
   const pivot = toCanvas(pts.pivot);
 
@@ -715,41 +720,64 @@ function drawPhotoAvatar(){
 
   ctx.drawImage(img, offX, offY, drawW, drawH);
 
-  // mouth: darken/open based on jawOpen
-  const mouth = toCanvas(pts.mouth);
-  const mouthWpx = pts.mouth.w*scale;
-  if(state.jawOpen > 0.06){
-    const openPx = state.jawOpen*26;
+  // --- jaw / mouth: warp the real skin down instead of drawing a shape on top ---
+  const splitYpx = offY + pts.mouth.topY*scale - 2;
+  const chinYpx = offY + pts.chinY*scale;
+  const dropPx = state.jawOpen * 30;
+  if(dropPx > 1){
+    warpDrop(offX, splitYpx, offX+drawW, chinYpx+drawH*0.05, dropPx);
+
+    // mouth cavity — only a small, narrow shape, colour sampled from the photo's own lip tone
+    const mouth = toCanvas(pts.mouth);
+    const mouthWpx = pts.mouth.w*scale;
+    const gapH = dropPx*0.8;
+    ctx.save();
     ctx.beginPath();
-    ctx.ellipse(mouth.x, mouth.y+openPx*0.4, mouthWpx*0.34, openPx, 0,0,Math.PI*2);
-    ctx.fillStyle = 'rgba(35,14,14,0.88)';
+    ctx.ellipse(mouth.x, splitYpx + gapH*0.45, mouthWpx*0.36, Math.max(2,gapH*0.5), 0,0,Math.PI*2);
+    const grad = ctx.createLinearGradient(0, splitYpx, 0, splitYpx+gapH);
+    grad.addColorStop(0, 'rgba(60,20,20,0.85)');
+    grad.addColorStop(1, 'rgba(15,5,5,0.92)');
+    ctx.fillStyle = grad;
     ctx.fill();
-  }
-  if(state.smile > 0.1){
-    ctx.globalAlpha = Math.min(0.35, state.smile*0.4);
-    ctx.beginPath();
-    ctx.ellipse(mouth.x, mouth.y, mouthWpx*0.55, mouthWpx*0.18, 0,0,Math.PI*2);
-    ctx.fillStyle = pts.skin;
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
-  // eyelids: cover eye with skin tone when blinking
-  drawPhotoEyelid(toCanvas(pts.leftEye), pts.leftEye.w*scale, pts.leftEye.h*scale, state.blinkL, pts.skin);
-  drawPhotoEyelid(toCanvas(pts.rightEye), pts.rightEye.w*scale, pts.rightEye.h*scale, state.blinkR, pts.skin);
+  // --- eyes: pull the brow/lid skin down over the eye when blinking ---
+  warpEyelid(pts.leftEye, state.blinkL, toCanvas, scale, offX, offY, drawW, drawH, img);
+  warpEyelid(pts.rightEye, state.blinkR, toCanvas, scale, offX, offY, drawW, drawH, img);
 
   ctx.restore();
 }
 
-function drawPhotoEyelid(center, wpx, hpx, blink, skin){
-  if(blink < 0.25) return;
-  ctx.save();
-  ctx.globalAlpha = Math.min(1, blink*1.3);
-  ctx.beginPath();
-  ctx.ellipse(center.x, center.y, wpx*0.75, hpx*1.4, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin;
-  ctx.fill();
-  ctx.restore();
+// Redraws the same photo shifted down by `maxShift` px within a clipped region,
+// in a few soft bands so the motion looks like the skin stretching, not a hard cut.
+function warpDrop(left, top, right, bottom, maxShift, bands=9, easeFrac=0.6){
+  for(let i=0;i<bands;i++){
+    const t0=i/bands, t1=(i+1)/bands;
+    const bandTop = top + t0*(bottom-top);
+    const bandBot = top + t1*(bottom-top);
+    const eased = Math.min(1, t1/easeFrac);
+    const dy = maxShift*eased;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, bandTop-1, right-left, bandBot-bandTop+2);
+    ctx.clip();
+    ctx.drawImage(currentPhotoImg, offXglobal, offYglobal+dy, drawWglobal, drawHglobal);
+    ctx.restore();
+  }
+}
+
+function warpEyelid(eye, blink, toCanvas, scale, offX, offY, drawW, drawH, img){
+  if(blink < 0.06) return;
+  const c = toCanvas(eye);
+  const eyeHpx = eye.h*scale;
+  const eyeWpx = eye.w*scale;
+  const top = c.y - eyeHpx*2.6;
+  const bottom = c.y + eyeHpx*1.4;
+  const left = c.x - eyeWpx*0.85;
+  const right = c.x + eyeWpx*0.85;
+  const maxShift = (bottom-top)*0.72*blink;
+  warpDrop(left, top, right, bottom, maxShift, 6, 0.7);
 }
 
 function drawDebug(result){
